@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.Layout;
 import android.view.View;
+import android.view.accessibility.AccessibilityEvent;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -34,6 +35,10 @@ public class MainActivity extends Activity {
     private Button btnPrevChar;
     private Button btnNextChar;
     private Button btnNextWord;
+
+    private static final int KIND_CHAR = 0;
+    private static final int KIND_WORD = 1;
+    private static final int KIND_OTHER = 2;
 
     private boolean selecting = false;
     private int anchor = 0;
@@ -78,16 +83,16 @@ public class MainActivity extends Activity {
         btnPaste.setOnClickListener(v -> doPaste());
         btnSelectAll.setOnClickListener(v -> doSelectAll());
 
-        btnHome.setOnClickListener(v -> moveTo(0, false));
-        btnEnd.setOnClickListener(v -> moveTo(editor.length(), true));
+        btnHome.setOnClickListener(v -> moveTo(0, false, KIND_OTHER));
+        btnEnd.setOnClickListener(v -> moveTo(editor.length(), true, KIND_OTHER));
         btnUp.setOnClickListener(v -> moveLine(-1));
         btnDown.setOnClickListener(v -> moveLine(1));
 
         btnSelToggle.setOnClickListener(v -> toggleSelection());
-        btnPrevWord.setOnClickListener(v -> moveTo(prevWordPos(cursor()), false));
-        btnPrevChar.setOnClickListener(v -> moveTo(prevCharPos(cursor()), false));
-        btnNextChar.setOnClickListener(v -> moveTo(nextCharPos(cursor()), true));
-        btnNextWord.setOnClickListener(v -> moveTo(nextWordPos(cursor()), true));
+        btnPrevWord.setOnClickListener(v -> moveTo(prevWordPos(cursor()), false, KIND_WORD));
+        btnPrevChar.setOnClickListener(v -> moveTo(prevCharPos(cursor()), false, KIND_CHAR));
+        btnNextChar.setOnClickListener(v -> moveTo(nextCharPos(cursor()), true, KIND_CHAR));
+        btnNextWord.setOnClickListener(v -> moveTo(nextWordPos(cursor()), true, KIND_WORD));
 
         applyLanguage();
         updateLabel();
@@ -180,33 +185,20 @@ public class MainActivity extends Activity {
         return new String(Character.toChars(cp));
     }
 
-    private String wordText(int pos) {
-        CharSequence t = editor.getText();
-        int n = t.length();
-        if (pos >= n) {
-            return endText();
+    /** Text describing the part of the document between a and b (a < b). */
+    private String segmentText(int a, int b, int kind) {
+        int count = b - a;
+        if (kind == KIND_OTHER || count > 200) {
+            return S.t(this, count + " حرف", count + " characters");
         }
-        int start;
-        if (isWs(t.charAt(pos))) {
-            int i = pos;
-            while (i < n && isWs(t.charAt(i))) {
-                i++;
-            }
-            if (i >= n) {
-                return endText();
-            }
-            start = i;
-        } else {
-            start = pos;
-            while (start > 0 && !isWs(t.charAt(start - 1))) {
-                start--;
-            }
+        if (kind == KIND_CHAR) {
+            return charText(a);
         }
-        int end = start;
-        while (end < n && !isWs(t.charAt(end))) {
-            end++;
+        String w = editor.getText().subSequence(a, b).toString().trim();
+        if (w.isEmpty()) {
+            return charText(a);
         }
-        return t.subSequence(start, end).toString();
+        return w;
     }
 
     // ---------------------------------------------------------------- movement
@@ -279,30 +271,48 @@ public class MainActivity extends Activity {
             float x = layout.getPrimaryHorizontal(p);
             newPos = layout.getOffsetForHorizontal(target, x);
         }
-        moveTo(newPos, delta > 0);
+        moveTo(newPos, delta > 0, KIND_OTHER);
     }
 
-    private void moveTo(int target, boolean forward) {
+    /** Moves the cursor without letting the EditText speak its own selection event. */
+    private void setSel(int start, int end) {
+        editor.setSuppressSelectionEvents(true);
+        try {
+            if (start == end) {
+                editor.setSelection(start);
+            } else {
+                editor.setSelection(start, end);
+            }
+        } finally {
+            editor.setSuppressSelectionEvents(false);
+        }
+    }
+
+    private void moveTo(int target, boolean forward, int kind) {
         int len = editor.length();
         int old = cursor();
         int pos = Math.max(0, Math.min(target, len));
         if (selecting) {
             anchor = Math.max(0, Math.min(anchor, len));
-            editor.setSelection(anchor, pos);
+            setSel(anchor, pos);
         } else {
-            editor.setSelection(pos);
+            setSel(pos, pos);
         }
         updateLabel();
 
-        int mode = S.mode(this);
-        if (mode == S.MODE_SILENT) {
+        // Speech happens only while the selection switch is on.
+        if (!selecting) {
             return;
         }
         if (pos == old) {
             announce(forward ? endText() : startText());
             return;
         }
-        announce(mode == S.MODE_CHAR ? charText(pos) : wordText(pos));
+        int a = Math.min(old, pos);
+        int b = Math.max(old, pos);
+        boolean shrinking = Math.abs(pos - anchor) < Math.abs(old - anchor);
+        String prefix = shrinking ? S.t(this, "لغو انتخاب ", "Unselected ") : "";
+        announce(prefix + segmentText(a, b, kind));
     }
 
     // ---------------------------------------------------------------- selection
@@ -311,7 +321,7 @@ public class MainActivity extends Activity {
         selecting = !selecting;
         if (selecting) {
             anchor = cursor();
-            editor.setSelection(anchor);
+            setSel(anchor, anchor);
             announce(S.t(this, "شروع انتخاب", "Selection started"));
         } else {
             int count = Math.abs(editor.getSelectionEnd() - editor.getSelectionStart());
@@ -332,6 +342,14 @@ public class MainActivity extends Activity {
 
     private int selEnd() {
         return Math.max(0, Math.max(editor.getSelectionStart(), editor.getSelectionEnd()));
+    }
+
+    /** Tells the screen reader that the editor text changed, so it drops any old copy. */
+    private void refreshEditorNode() {
+        if (editor.getParent() != null) {
+            editor.getParent().notifySubtreeAccessibilityStateChanged(
+                    editor, editor, AccessibilityEvent.CONTENT_CHANGE_TYPE_TEXT);
+        }
     }
 
     // ---------------------------------------------------------------- clipboard
@@ -362,8 +380,14 @@ public class MainActivity extends Activity {
         Editable ed = editor.getText();
         String text = ed.subSequence(s, e).toString();
         clipboard().setPrimaryClip(ClipData.newPlainText("text", text));
-        ed.delete(s, e);
-        editor.setSelection(Math.min(s, editor.length()));
+        editor.setSuppressSelectionEvents(true);
+        try {
+            ed.delete(s, e);
+        } finally {
+            editor.setSuppressSelectionEvents(false);
+        }
+        setSel(Math.min(s, editor.length()), Math.min(s, editor.length()));
+        refreshEditorNode();
         endSelectionMode();
         updateLabel();
         announce(S.t(this, "برش انجام شد", "Cut"));
@@ -382,8 +406,15 @@ public class MainActivity extends Activity {
         }
         int s = selStart();
         int e = selEnd();
-        editor.getText().replace(s, e, text);
-        editor.setSelection(Math.min(s + text.length(), editor.length()));
+        editor.setSuppressSelectionEvents(true);
+        try {
+            editor.getText().replace(s, e, text);
+        } finally {
+            editor.setSuppressSelectionEvents(false);
+        }
+        int np = Math.min(s + text.length(), editor.length());
+        setSel(np, np);
+        refreshEditorNode();
         endSelectionMode();
         updateLabel();
         announce(S.t(this, "الصاق شد", "Pasted"));
@@ -396,7 +427,7 @@ public class MainActivity extends Activity {
             return;
         }
         anchor = 0;
-        editor.setSelection(0, len);
+        setSel(0, len);
         endSelectionMode();
         updateLabel();
         announce(S.t(this, "همه متن انتخاب شد، " + len + " حرف",

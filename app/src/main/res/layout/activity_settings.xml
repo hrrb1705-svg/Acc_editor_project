@@ -24,71 +24,20 @@
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/sectionRead"
+                android:id="@+id/sectionLang"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:labelFor="@+id/langSpinner"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
-            <RadioGroup
-                android:id="@+id/modeGroup"
+            <Spinner
+                android:id="@+id/langSpinner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <RadioButton
-                    android:id="@+id/radioSilent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="56dp"
-                    android:textSize="18sp" />
-
-                <RadioButton
-                    android:id="@+id/radioChar"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="56dp"
-                    android:textSize="18sp" />
-
-                <RadioButton
-                    android:id="@+id/radioWord"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="56dp"
-                    android:textSize="18sp" />
-            </RadioGroup>
-
-            <TextView
-                android:id="@+id/sectionLang"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingTop="24dp"
-                android:paddingBottom="8dp"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <RadioGroup
-                android:id="@+id/langGroup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <RadioButton
-                    android:id="@+id/radioFa"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="56dp"
-                    android:textSize="18sp" />
-
-                <RadioButton
-                    android:id="@+id/radioEn"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="56dp"
-                    android:textSize="18sp" />
-            </RadioGroup>
+                android:minHeight="56dp" />
         </LinearLayout>
     </ScrollView>
 

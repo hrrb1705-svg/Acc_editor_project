@@ -5,22 +5,18 @@ import android.app.AlertDialog;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 public class SettingsActivity extends Activity {
 
     private View root;
     private TextView titleView;
-    private TextView sectionRead;
     private TextView sectionLang;
-    private RadioButton radioSilent;
-    private RadioButton radioChar;
-    private RadioButton radioWord;
-    private RadioButton radioFa;
-    private RadioButton radioEn;
+    private Spinner langSpinner;
     private Button helpButton;
 
     @Override
@@ -30,47 +26,34 @@ public class SettingsActivity extends Activity {
 
         root = findViewById(R.id.root);
         titleView = findViewById(R.id.titleView);
-        sectionRead = findViewById(R.id.sectionRead);
         sectionLang = findViewById(R.id.sectionLang);
-        radioSilent = findViewById(R.id.radioSilent);
-        radioChar = findViewById(R.id.radioChar);
-        radioWord = findViewById(R.id.radioWord);
-        radioFa = findViewById(R.id.radioFa);
-        radioEn = findViewById(R.id.radioEn);
+        langSpinner = findViewById(R.id.langSpinner);
         helpButton = findViewById(R.id.helpButton);
-        RadioGroup modeGroup = findViewById(R.id.modeGroup);
-        RadioGroup langGroup = findViewById(R.id.langGroup);
 
         if (Build.VERSION.SDK_INT >= 28) {
             titleView.setAccessibilityHeading(true);
-            sectionRead.setAccessibilityHeading(true);
             sectionLang.setAccessibilityHeading(true);
         }
 
-        int mode = S.mode(this);
-        if (mode == S.MODE_CHAR) {
-            modeGroup.check(R.id.radioChar);
-        } else if (mode == S.MODE_WORD) {
-            modeGroup.check(R.id.radioWord);
-        } else {
-            modeGroup.check(R.id.radioSilent);
-        }
-        langGroup.check(S.fa(this) ? R.id.radioFa : R.id.radioEn);
+        String[] names = new String[]{"فارسی", "English"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, names);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        langSpinner.setAdapter(adapter);
+        langSpinner.setSelection(S.fa(this) ? 0 : 1, false);
 
-        modeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            int m = S.MODE_SILENT;
-            if (checkedId == R.id.radioChar) {
-                m = S.MODE_CHAR;
-            } else if (checkedId == R.id.radioWord) {
-                m = S.MODE_WORD;
+        langSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String lang = position == 1 ? "en" : "fa";
+                if (!lang.equals(S.prefs(SettingsActivity.this).getString(S.KEY_LANG, "fa"))) {
+                    S.prefs(SettingsActivity.this).edit().putString(S.KEY_LANG, lang).apply();
+                    applyLanguage();
+                }
             }
-            S.prefs(this).edit().putInt(S.KEY_MODE, m).apply();
-        });
 
-        langGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            String lang = checkedId == R.id.radioEn ? "en" : "fa";
-            S.prefs(this).edit().putString(S.KEY_LANG, lang).apply();
-            applyLanguage();
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
         });
 
         helpButton.setOnClickListener(v -> showHelp());
@@ -85,13 +68,7 @@ public class SettingsActivity extends Activity {
         String title = S.t(this, "تنظیمات", "Settings");
         setTitle(title);
         titleView.setText(title);
-        sectionRead.setText(S.t(this, "پس از جابجایی مکان نما", "After the cursor moves"));
-        radioSilent.setText(S.t(this, "سکوت", "Silent"));
-        radioChar.setText(S.t(this, "خواندن حرف بعدی", "Read next character"));
-        radioWord.setText(S.t(this, "خواندن کلمه بعدی", "Read next word"));
         sectionLang.setText(S.t(this, "زبان", "Language"));
-        radioFa.setText("فارسی");
-        radioEn.setText("English");
         helpButton.setText(S.t(this, "راهنما", "Help"));
     }
 
