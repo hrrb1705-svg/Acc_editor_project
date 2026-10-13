@@ -72,13 +72,29 @@ public class SettingsActivity extends Activity {
         helpButton.setText(S.t(this, "راهنما", "Help"));
     }
 
+    private String loadHelp() {
+        String file = S.fa(this) ? "help_fa.txt" : "help_en.txt";
+        try (java.io.BufferedReader r = new java.io.BufferedReader(
+                new java.io.InputStreamReader(getAssets().open(file), "UTF-8"))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) {
+                sb.append(line).append('\n');
+            }
+            return sb.toString();
+        } catch (java.io.IOException e) {
+            return S.t(this, "خواندن راهنما ممکن نشد.", "The help text could not be loaded.");
+        }
+    }
+
     private void showHelp() {
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(S.t(this, "راهنما", "Help"))
-                .setMessage(S.t(this,
-                        "راهنمای برنامه به‌زودی کامل می‌شود.",
-                        "The help guide will be completed later."))
+                .setMessage(loadHelp())
                 .setPositiveButton(S.t(this, "بستن", "Close"), null)
-                .show();
+                .create();
+        dialog.show();
+        dialog.getWindow().getDecorView().setLayoutDirection(
+                S.fa(this) ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
     }
 }

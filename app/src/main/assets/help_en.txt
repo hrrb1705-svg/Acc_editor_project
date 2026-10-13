@@ -1,0 +1,41 @@
+Accessible Text Editor Help
+
+This app is made for writing and editing text with a screen reader. Everything is done with simple buttons.
+
+Main screen, from top to bottom:
+First, the top line: the app name and the Settings button.
+Second, the cursor label. Its number is the cursor position in the text, and it updates after every move.
+Third, the text area. Type or paste your text here. This area is scrollable.
+Fourth, button row one: Cut, Copy, Paste, Select all.
+Fifth, button row two: Start of text, Line up, Line down, End of text.
+Sixth, button row three: the selection switch (Start selection or End selection), Previous word, Previous character, Next character, Next word.
+In English, rows two and three run from left to right. In Persian they run from right to left, so the first button of each row is on the right.
+
+When the text area is empty, only the Paste button is active. The other buttons become active as soon as there is text.
+
+Moving the cursor:
+The buttons in rows two and three move the cursor, and the app reads the result after every move.
+First, the previous and next character buttons read the character next to the cursor.
+Second, the previous and next word buttons read the word next to the cursor.
+Third, spaces and new lines are read by name.
+Fourth, when you reach the start or the end of the text and press the same direction again, the app says Start of text or End of text.
+
+Selecting text:
+First, move the cursor to where the selection should begin.
+Second, press the selection switch. The app says Selection started, and the button name changes to End selection.
+Third, move the cursor with the character and word buttons. Each time, the character or word that was added to the selection is read. If the selection shrinks, the app first says Unselected.
+Fourth, the line up, line down, start and end buttons say how many characters were moved.
+Fifth, press the switch again. The app says the selection ended and how many characters are selected.
+Sixth, the Select all button selects the whole text at once.
+
+Cut, Copy and Paste:
+First, Copy stores the selected text and leaves it in place.
+Second, Cut stores the selected text and removes it from the text.
+Third, Paste puts the stored text at the cursor. If some text is selected, it replaces it.
+Fourth, if nothing is selected and you press Cut or Copy, the app says Nothing is selected.
+
+Settings:
+The Settings screen has a drop-down list for the app language, Persian or English. Changing it changes all texts and the screen layout.
+At the bottom of the Settings screen is the Help button, which shows this text.
+
+App made by Hamid reza rahimi.

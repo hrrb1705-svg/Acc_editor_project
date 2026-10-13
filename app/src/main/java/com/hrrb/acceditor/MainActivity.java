@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
+import android.text.TextWatcher;
 import android.text.Layout;
 import android.view.View;
 import android.view.accessibility.AccessibilityEvent;
@@ -94,7 +95,23 @@ public class MainActivity extends Activity {
         btnNextChar.setOnClickListener(v -> moveTo(nextCharPos(cursor()), true, KIND_CHAR));
         btnNextWord.setOnClickListener(v -> moveTo(nextWordPos(cursor()), true, KIND_WORD));
 
+        editor.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                updateButtons();
+            }
+        });
+
         applyLanguage();
+        updateButtons();
         updateLabel();
     }
 
@@ -111,7 +128,7 @@ public class MainActivity extends Activity {
         boolean fa = S.fa(this);
         root.setLayoutDirection(fa ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
 
-        String name = S.t(this, "ویرایشگر دسترس‌پذیر", "Accessible Editor");
+        String name = S.t(this, "ویرایشگر متن دسترس پذیر", "Accessible Text Editor");
         setTitle(name);
         titleView.setText(name);
         btnSettings.setText(S.t(this, "تنظیمات", "Settings"));
@@ -183,6 +200,51 @@ public class MainActivity extends Activity {
             return S.t(this, "نیم‌فاصله", "Zero width non joiner");
         }
         return new String(Character.toChars(cp));
+    }
+
+    /** While the text area is empty only Paste is active. */
+    private void updateButtons() {
+        boolean has = editor.length() > 0;
+        Button[] others = {btnCut, btnCopy, btnSelectAll, btnHome, btnUp, btnDown, btnEnd,
+                btnSelToggle, btnPrevWord, btnPrevChar, btnNextChar, btnNextWord};
+        for (Button b : others) {
+            b.setEnabled(has);
+        }
+        btnPaste.setEnabled(true);
+        if (!has && selecting) {
+            selecting = false;
+            updateToggleLabel();
+        }
+    }
+
+    /** The word that starts at, or right after, the given position. */
+    private String wordText(int pos) {
+        CharSequence t = editor.getText();
+        int n = t.length();
+        if (pos >= n) {
+            return endText();
+        }
+        int start;
+        if (isWs(t.charAt(pos))) {
+            int i = pos;
+            while (i < n && isWs(t.charAt(i))) {
+                i++;
+            }
+            if (i >= n) {
+                return endText();
+            }
+            start = i;
+        } else {
+            start = pos;
+            while (start > 0 && !isWs(t.charAt(start - 1))) {
+                start--;
+            }
+        }
+        int end = start;
+        while (end < n && !isWs(t.charAt(end))) {
+            end++;
+        }
+        return t.subSequence(start, end).toString();
     }
 
     /** Text describing the part of the document between a and b (a < b). */
@@ -300,12 +362,14 @@ public class MainActivity extends Activity {
         }
         updateLabel();
 
-        // Speech happens only while the selection switch is on.
-        if (!selecting) {
-            return;
-        }
+        // Speech works in every state. The EditText's own selection speech is
+        // suppressed in setSel(), so each move is read exactly once, by the app.
         if (pos == old) {
             announce(forward ? endText() : startText());
+            return;
+        }
+        if (!selecting) {
+            announce(kind == KIND_WORD ? wordText(pos) : charText(pos));
             return;
         }
         int a = Math.min(old, pos);
