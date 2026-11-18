@@ -39,3 +39,7 @@ The Settings screen has a drop-down list for the app language, Persian or Englis
 At the bottom of the Settings screen is the Help button, which shows this text.
 
 App made by Hamid reza rahimi.
+
+Choose file and Save:
+First, Choose file in the top row opens a text file from the phone. If the editor has text, you can replace it, append to it, or cancel.
+Second, Save stores the text under a name you can change, in Documents, subfolder acc-rec.

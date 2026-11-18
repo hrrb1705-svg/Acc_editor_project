@@ -26,6 +26,18 @@
             android:layout_height="wrap_content"
             android:minHeight="56dp"
             android:textAllCaps="false" />
+        <Button
+            android:id="@+id/btnOpen"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:textAllCaps="false" />
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:textAllCaps="false" />
     </LinearLayout>
 
     <TextView

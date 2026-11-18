@@ -12,6 +12,23 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.text.Layout;
 import android.view.View;
+import android.app.AlertDialog;
+import android.content.ContentValues;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.widget.EditText;
+import android.widget.Toast;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Button;
 import android.widget.TextView;
@@ -23,6 +40,8 @@ public class MainActivity extends Activity {
     private TextView cursorLabel;
     private CursorEditText editor;
     private Button btnSettings;
+    private Button btnOpen;
+    private Button btnSave;
     private Button btnCut;
     private Button btnCopy;
     private Button btnPaste;
@@ -57,6 +76,8 @@ public class MainActivity extends Activity {
         cursorLabel = findViewById(R.id.cursorLabel);
         editor = findViewById(R.id.editor);
         btnSettings = findViewById(R.id.btnSettings);
+        btnOpen = findViewById(R.id.btnOpen);
+        btnSave = findViewById(R.id.btnSave);
         btnCut = findViewById(R.id.btnCut);
         btnCopy = findViewById(R.id.btnCopy);
         btnPaste = findViewById(R.id.btnPaste);
@@ -78,6 +99,9 @@ public class MainActivity extends Activity {
         editor.setSelectionListener((start, end) -> updateLabel());
 
         btnSettings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+
+        btnOpen.setOnClickListener(v -> pickFile());
+        btnSave.setOnClickListener(v -> askSaveName());
 
         btnCut.setOnClickListener(v -> doCut());
         btnCopy.setOnClickListener(v -> doCopy());
@@ -122,6 +146,178 @@ public class MainActivity extends Activity {
         updateLabel();
     }
 
+    // ---------------------------------------------------------------- files
+
+    private static final int REQ_OPEN = 101;
+    private static final int REQ_PERM = 102;
+    private String pendingSaveName;
+
+    private void pickFile() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/*", "application/json", "application/xml"});
+        try {
+            startActivityForResult(i, REQ_OPEN);
+        } catch (Exception e) {
+            toast(S.t(this, "انتخاب فایل ممکن نشد", "Cannot open the file chooser"));
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_OPEN && res == RESULT_OK && data != null && data.getData() != null) {
+            readFile(data.getData());
+        }
+    }
+
+    private void readFile(Uri uri) {
+        String text;
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+                if (out.size() > 10 * 1024 * 1024) {
+                    toast(S.t(this, "فایل بیش از ده مگابایت است", "File is larger than 10 MB"));
+                    return;
+                }
+            }
+            byte[] b = out.toByteArray();
+            int off = 0;
+            if (b.length >= 3 && (b[0] & 0xFF) == 0xEF && (b[1] & 0xFF) == 0xBB && (b[2] & 0xFF) == 0xBF) {
+                off = 3;
+            }
+            text = new String(b, off, b.length - off, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            toast(S.t(this, "خواندن فایل ممکن نشد", "Could not read the file"));
+            return;
+        }
+        final String content = text;
+        if (editor.length() == 0) {
+            editor.setText(content);
+            editor.setSelection(0);
+            fileLoaded();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(S.t(this, "متن موجود است", "Existing text"))
+                .setMessage(S.t(this, "در صفحه متن وجود دارد. چه کنم؟", "The editor already has text. What should I do?"))
+                .setPositiveButton(S.t(this, "جایگزین متن موجود", "Replace"), (d, w) -> {
+                    editor.setText(content);
+                    editor.setSelection(0);
+                    fileLoaded();
+                })
+                .setNeutralButton(S.t(this, "افزودن به انتها", "Append"), (d, w) -> {
+                    editor.append(content);
+                    editor.setSelection(editor.length());
+                    fileLoaded();
+                })
+                .setNegativeButton(S.t(this, "انصراف", "Cancel"), null)
+                .show();
+    }
+
+    private void fileLoaded() {
+        selecting = false;
+        updateToggleLabel();
+        updateButtons();
+        updateLabel();
+        editor.requestFocus();
+        announce(S.t(this, "فایل بارگذاری شد", "File loaded"));
+    }
+
+    private void askSaveName() {
+        if (editor.length() == 0) {
+            toast(S.t(this, "متنی برای ذخیره نیست", "There is no text to save"));
+            return;
+        }
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + ".txt");
+        input.selectAll();
+        new AlertDialog.Builder(this)
+                .setTitle(S.t(this, "نام فایل", "File name"))
+                .setMessage(S.t(this, "ذخیره در پوشه acc-rec", "Saved in the folder acc-rec"))
+                .setView(input)
+                .setPositiveButton(S.t(this, "ذخیره", "Save"), (d, w) -> {
+                    String name = input.getText().toString().trim().replaceAll("[\\\\/:*?\"<>|]", "_");
+                    if (name.isEmpty()) {
+                        name = "text.txt";
+                    }
+                    if (!name.contains(".")) {
+                        name += ".txt";
+                    }
+                    saveFile(name);
+                })
+                .setNegativeButton(S.t(this, "انصراف", "Cancel"), null)
+                .show();
+    }
+
+    private void saveFile(String name) {
+        if (Build.VERSION.SDK_INT < 29
+                && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            pendingSaveName = name;
+            requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_PERM);
+            return;
+        }
+        byte[] data = editor.getText().toString().getBytes(StandardCharsets.UTF_8);
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentValues cv = new ContentValues();
+                cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                cv.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                cv.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOCUMENTS + "/acc-rec");
+                Uri uri = getContentResolver().insert(MediaStore.Files.getContentUri("external"), cv);
+                if (uri == null) {
+                    throw new Exception("insert failed");
+                }
+                try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                    os.write(data);
+                }
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOCUMENTS), "acc-rec");
+                if (!dir.exists() && !dir.mkdirs()) {
+                    throw new Exception("mkdirs failed");
+                }
+                File f = new File(dir, name);
+                int k = 1;
+                while (f.exists()) {
+                    int dot = name.lastIndexOf('.');
+                    String base = dot > 0 ? name.substring(0, dot) : name;
+                    String ext = dot > 0 ? name.substring(dot) : "";
+                    f = new File(dir, base + "(" + k++ + ")" + ext);
+                }
+                try (FileOutputStream os = new FileOutputStream(f)) {
+                    os.write(data);
+                }
+            }
+            String msg = S.t(this, "ذخیره شد در پوشه اسناد، acc-rec", "Saved in Documents, acc-rec");
+            toast(msg);
+            announce(msg);
+        } catch (Exception e) {
+            toast(S.t(this, "ذخیره ممکن نشد", "Could not save the file"));
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] results) {
+        super.onRequestPermissionsResult(req, perms, results);
+        if (req == REQ_PERM && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED
+                && pendingSaveName != null) {
+            saveFile(pendingSaveName);
+        } else if (req == REQ_PERM) {
+            toast(S.t(this, "اجازه ذخیره داده نشد", "Storage permission denied"));
+        }
+    }
+
+    private void toast(String m) {
+        Toast.makeText(this, m, Toast.LENGTH_LONG).show();
+    }
+
     // ---------------------------------------------------------------- language
 
     private void applyLanguage() {
@@ -134,6 +330,8 @@ public class MainActivity extends Activity {
         btnSettings.setText(S.t(this, "تنظیمات", "Settings"));
         editor.setHint(S.t(this, "متن را اینجا بنویسید", "Type your text here"));
 
+        btnOpen.setText(S.t(this, "انتخاب فایل", "Choose file"));
+        btnSave.setText(S.t(this, "ذخیره", "Save"));
         btnCut.setText(S.t(this, "برش", "Cut"));
         btnCopy.setText(S.t(this, "کپی", "Copy"));
         btnPaste.setText(S.t(this, "الصاق", "Paste"));
