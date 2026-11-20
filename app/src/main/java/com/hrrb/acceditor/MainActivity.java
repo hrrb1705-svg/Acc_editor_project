@@ -137,6 +137,8 @@ public class MainActivity extends Activity {
         applyLanguage();
         updateButtons();
         updateLabel();
+
+        handleViewIntent(getIntent());
     }
 
     @Override
@@ -228,7 +230,14 @@ public class MainActivity extends Activity {
         announce(S.t(this, "فایل بارگذاری شد", "File loaded"));
     }
 
+    private boolean exitAfterSave = false;
+
     private void askSaveName() {
+        askSaveName(false);
+    }
+
+    private void askSaveName(final boolean exitAfter) {
+        exitAfterSave = exitAfter;
         if (editor.length() == 0) {
             toast(S.t(this, "متنی برای ذخیره نیست", "There is no text to save"));
             return;
@@ -249,19 +258,21 @@ public class MainActivity extends Activity {
                     if (!name.contains(".")) {
                         name += ".txt";
                     }
-                    saveFile(name);
+                    if (saveFile(name) && exitAfterSave) {
+                        exitAndClear();
+                    }
                 })
                 .setNegativeButton(S.t(this, "انصراف", "Cancel"), null)
                 .show();
     }
 
-    private void saveFile(String name) {
+    private boolean saveFile(String name) {
         if (Build.VERSION.SDK_INT < 29
                 && checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             pendingSaveName = name;
             requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_PERM);
-            return;
+            return false;
         }
         byte[] data = editor.getText().toString().getBytes(StandardCharsets.UTF_8);
         try {
@@ -298,8 +309,10 @@ public class MainActivity extends Activity {
             String msg = S.t(this, "ذخیره شد در پوشه اسناد، acc-rec", "Saved in Documents, acc-rec");
             toast(msg);
             announce(msg);
+            return true;
         } catch (Exception e) {
             toast(S.t(this, "ذخیره ممکن نشد", "Could not save the file"));
+            return false;
         }
     }
 
@@ -308,7 +321,9 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(req, perms, results);
         if (req == REQ_PERM && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED
                 && pendingSaveName != null) {
-            saveFile(pendingSaveName);
+            if (saveFile(pendingSaveName) && exitAfterSave) {
+                exitAndClear();
+            }
         } else if (req == REQ_PERM) {
             toast(S.t(this, "اجازه ذخیره داده نشد", "Storage permission denied"));
         }
@@ -358,7 +373,61 @@ public class MainActivity extends Activity {
     }
 
     private void updateLabel() {
-        cursorLabel.setText(S.t(this, "مکان نما: ", "Cursor position: ") + cursor());
+        int p = cursor();
+        int len = editor.length();
+        String ch;
+        if (p >= len) {
+            ch = S.t(this, "انتها", "end of text");
+        } else {
+            char c = editor.getText().charAt(p);
+            if (c == ' ') {
+                ch = S.t(this, "فاصله", "space");
+            } else if (c == '\n') {
+                ch = S.t(this, "خط جدید", "new line");
+            } else if (c == '\t') {
+                ch = S.t(this, "تب", "tab");
+            } else {
+                ch = String.valueOf(c);
+            }
+        }
+        int sel = Math.abs(editor.getSelectionEnd() - editor.getSelectionStart());
+        cursorLabel.setText(S.t(this, "مکان نما: ", "Cursor position: ") + p
+                + S.t(this, "، حرف: ", ", character: ") + ch
+                + S.t(this, "، انتخاب: ", ", selected: ") + sel);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleViewIntent(intent);
+    }
+
+    private void handleViewIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) {
+            return;
+        }
+        readFile(intent.getData());
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (editor.length() == 0) {
+            finish();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(S.t(this, "خروج از برنامه", "Exit"))
+                .setMessage(S.t(this, "آیا می‌خواهی متن را ذخیره کنی؟ بعد از ذخیره یا انتخاب «ذخیره نکن»، متن از حافظه برنامه پاک می‌شود.",
+                        "Do you want to save the text? After saving or choosing Do not save, the text is cleared from memory."))
+                .setPositiveButton(S.t(this, "ذخیره", "Save"), (d, w) -> askSaveName(true))
+                .setNeutralButton(S.t(this, "ذخیره نکن", "Do not save"), (d, w) -> exitAndClear())
+                .setNegativeButton(S.t(this, "انصراف", "Cancel"), null)
+                .show();
+    }
+
+    private void exitAndClear() {
+        editor.setText("");
+        finish();
     }
 
     // ---------------------------------------------------------------- speech
